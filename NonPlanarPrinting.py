@@ -1,15 +1,13 @@
-# Copyright (c) 2020 Ultimaker B.V.
-# Cura is released under the terms of the LGPLv3 or higher.
-# Created by Wayne Porter
-# Modification 5@xes 12/2020 Option increment_layer
 
 from ..Script import Script
 from UM.Application import Application
 import math
 import re
 
-class NonPlanarPrinting(Script):
 
+class NonPlanarPrinting(Script):
+    source = ''
+    file_object = open(source, 'a' )
     BED_CENTER_X = 0
     BED_CENTER_Y = 0
 
@@ -33,14 +31,14 @@ class NonPlanarPrinting(Script):
     start = 0
     end = 0
 
-    def __init__(self):
-        super().__init__()
-        
+    # *****************************************************************************************************
+    # Set up paramter input string
+    # *****************************************************************************************************
 
     def getSettingDataString(self):
-       return """{
-            "name": "Create Non",
-            "key": "CreateNon",
+        return """{
+            "name": "Create Non Planar Layers",
+            "key": "CreateNonPlanarLayers",
             "metadata": {},
             "version": 2,
             "settings":
@@ -50,7 +48,7 @@ class NonPlanarPrinting(Script):
                     "label": "Wave amplitude",
                     "description": "[mm] the maximum amplitude of the wavyness",
                     "type": "float",
-                    "default_value": "2.0",
+                    "default_value": "5.0",
                     "minimum_value": "0.5"
                 },
                 "wave_length":
@@ -58,7 +56,7 @@ class NonPlanarPrinting(Script):
                     "label": "Wave length",
                     "description": "[mm] the half wave length in xy direction of the waves for wing",
                     "type": "float",
-                    "default_value": "200.0",
+                    "default_value": "20.0",
                     "minimum_value": "0.0"
                 },
                 "wave_length_2":
@@ -74,7 +72,7 @@ class NonPlanarPrinting(Script):
                     "label": "Wave in",
                     "description": "[mm] the z-position where it starts getting wavy, should be somewhere above the first layer",
                     "type": "float",
-                    "default_value": "0.4",
+                    "default_value": "1.0",
                     "minimum_value": "0.4"
                 },
                 "wave_out":
@@ -90,7 +88,7 @@ class NonPlanarPrinting(Script):
                     "label": "Wave ramp",
                     "description": "[mm] the length of the transition between not wavy at all and maximum wavyness",
                     "type": "float",
-                    "default_value": "10",
+                    "default_value": "5",
                     "minimum_value": "5"
                 },
                 "wave_max_segment_length":
@@ -98,15 +96,15 @@ class NonPlanarPrinting(Script):
                     "label": "Wave Max Segment Length",
                     "description": "[mm] max. length of the wave segments, smaller values give a better approximation",
                     "type": "float",
-                    "default_value": "1",
-                    "minimum_value": "0.4"
+                    "default_value": "0.2",
+                    "minimum_value": "0.2"
                 },
                 "wave_digits":
                 {
                     "label": "Wave digits",
                     "description": "[1] accuracy of output g-code",
                     "type": "float",
-                    "default_value": "0.4",
+                    "default_value": "4",
                     "minimum_value": "0.4"
                 },
                 "wave_function":
@@ -118,8 +116,6 @@ class NonPlanarPrinting(Script):
                 }
             }
         }"""
-    
-
 
     def dist3(self, lastGcodeX, lastGcodeY, lastGcodeZ, x, y, z):
         return math.sqrt(math.pow(x - lastGcodeX, 2) + math.pow(y - lastGcodeY, 2) + math.pow(z - lastGcodeZ, 2))
@@ -154,7 +150,7 @@ class NonPlanarPrinting(Script):
                 "wave_amplitude") / 4.0 * math.sin(
                 y - self.BED_CENTER_Y) * 2 * math.pi / self.getSettingValueByKey("wave_length")
         elif self.getSettingValueByKey("wave_function") == "wing":
-            zOffset = self.getSettingValueByKey("wave_amplitude") / 2.0(
+            zOffset = self.getSettingValueByKey("wave_amplitude") / 2.0 + (
                 self.getSettingValueByKey("wave_amplitude") * math.sin(((x - self.BED_CENTER_X) * math.sqrt(
                     math.pi) / self.getSettingValueByKey("wave_length") - math.sqrt(
                     math.pow(math.pi / 2, 2))) * 1.0 + 0.5 * math.cos(
@@ -164,8 +160,8 @@ class NonPlanarPrinting(Script):
         return zOffset
 
     def calculate_extrusion_multiplier(self, x, y, z):
-        # LAYER_HEIGHT = 0.3
-        LAYER_HEIGHT = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
+        # LAYER_HEIGHT = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
+        LAYER_HEIGHT = 0.2
         ramps = self.calculate_ramps(z)
         this = self.calculate_z_displacement(z, y, z)
         last = self.calculate_z_displacement(x, y, z - LAYER_HEIGHT)
@@ -181,11 +177,12 @@ class NonPlanarPrinting(Script):
 
             distance = self.dist2(self.lastGcodeX, self.lastGcodeY, x, y)
 
-            segments = max(round(distance / self.getSettingValueByKey("wave_max_segment_length")), 1)
+            segments = max(round((distance / float(self.getSettingValueByKey("wave_max_segment_length")))+0.99), 1)
 
             gcode = " ; displaced move start " + str(segments) + " segments\n"
             # print(segments)
             for i in range(0, segments):
+
                 segmentX = self.lastGcodeX + i + 1 * (float(x) - self.lastGcodeX) / segments
                 segmentY = self.lastGcodeY + i + 1 * (float(y) - self.lastGcodeY) / segments
                 segmentZ = self.lastGcodeZ + i + 1 * (float(z) - self.lastGcodeZ) / segments
@@ -382,20 +379,27 @@ class NonPlanarPrinting(Script):
             self.end = 1
 
         if self.start == 0:
-            self.newText.append(self.process_end_gcode(thisLine))
-            # self.file_object.write(self.process_start_gcode(thisLine)+'\n')
+            self.newText.append(self.process_start_gcode(thisLine))
+            self.file_object.write(self.process_start_gcode(thisLine) + '\n')
+
         elif self.end == 1:
+
             self.newText.append(self.process_end_gcode(thisLine))
-            # self.file_object.write(self.process_end_gcode(thisLine)+'\n')
+            self.file_object.write(self.process_end_gcode(thisLine) + '\n')
         else:
-            self.newText.append(self.process_end_gcode(thisLine))
-            # self.file_object.write(self.filter_print_gcode(thisLine)+'\n')
+            self.newText.append(self.filter_print_gcode(thisLine))
+            self.file_object.write(self.filter_print_gcode(thisLine) + '\n')
         # print(self.newText)
 
     def print_buffer(self, data):
         print(data)
 
     def execute(self, data):
+        if __name__ == '__main__':
+            UseModule = getSettingDataSimulator.ScriptSim
+        else:
+            UseModule = self
+
         for layer in data:
 
             lines = layer.split('\n')
