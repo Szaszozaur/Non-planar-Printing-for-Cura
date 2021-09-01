@@ -1,4 +1,5 @@
 
+
 from ..Script import Script
 from UM.Application import Application
 import math
@@ -6,8 +7,7 @@ import re
 
 
 class NonPlanarPrinting(Script):
-    source = ''
-    file_object = open(source, 'a' )
+    file_object = open('C:\\Users\\Szaszeu\\AppData\\Roaming\\cura\\4.10\\sample.gcode', 'a' )
     BED_CENTER_X = 0
     BED_CENTER_Y = 0
 
@@ -160,8 +160,8 @@ class NonPlanarPrinting(Script):
         return zOffset
 
     def calculate_extrusion_multiplier(self, x, y, z):
-        # LAYER_HEIGHT = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
-        LAYER_HEIGHT = 0.2
+        LAYER_HEIGHT = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
+        # LAYER_HEIGHT = 0.2
         ramps = self.calculate_ramps(z)
         this = self.calculate_z_displacement(z, y, z)
         last = self.calculate_z_displacement(x, y, z - LAYER_HEIGHT)
@@ -379,16 +379,14 @@ class NonPlanarPrinting(Script):
             self.end = 1
 
         if self.start == 0:
-            self.newText.append(self.process_start_gcode(thisLine))
             self.file_object.write(self.process_start_gcode(thisLine) + '\n')
-
+            self.newText.append(self.process_start_gcode(thisLine))
         elif self.end == 1:
-
-            self.newText.append(self.process_end_gcode(thisLine))
             self.file_object.write(self.process_end_gcode(thisLine) + '\n')
+            self.newText.append(self.process_end_gcode(thisLine))
         else:
-            self.newText.append(self.filter_print_gcode(thisLine))
             self.file_object.write(self.filter_print_gcode(thisLine) + '\n')
+            self.newText.append(self.filter_print_gcode(thisLine))
         # print(self.newText)
 
     def print_buffer(self, data):
